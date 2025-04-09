@@ -1,6 +1,6 @@
 #include <iostream>
 
-# define N  1000
+# define N  100000
 
 void add(int *a, int *b, int *c)
 {
