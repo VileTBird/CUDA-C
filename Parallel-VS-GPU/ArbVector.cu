@@ -47,6 +47,9 @@ int main(void)
     cudaMemcpy(device_a, a, N * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(device_b, b, N * sizeof(int), cudaMemcpyHostToDevice);
 
+    // here our total number of blocks dont matter it can be arbitrary we can do more blocks in parallel to be faster
+    // or not even if we didn't it would work because its a while loop, our threads wont stop executing until each kernel id reaches past
+    // the max vector length count
     add<<<4,128>>>(device_a, device_b, device_c);
 
     cudaMemcpy(c, device_c, N * sizeof(int), cudaMemcpyDeviceToHost);
