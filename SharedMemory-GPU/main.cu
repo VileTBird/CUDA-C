@@ -1,13 +1,13 @@
 #include <iostream>
 
-# define threadsPerGrid 33 * 100
-# define N 10
+# define threadsPerGrid 256
+# define N 33 * 100
 
 # define min(a, b) {a<b?a:b}
 
 // just in case, right now we have N == 1000 what if N was something smaller than the predefined number of bloks pre grid
 // that is 32, we do not want that as its a waste of resources i think
-const int blocksPerGrid = min(32, (N + (threadsPerGrid-1) / (threadsPerGrid)));
+const int blocksPerGrid = 32;
 
 __global__ void dot(int *a, int *b, float *c)
 {
@@ -76,7 +76,7 @@ __global__ void dot(int *a, int *b, float *c)
     // hee its pretty simple we only check 0 cus who cares not exactly lol we only check 0 cus well 
     // if our results get halved then our summation will exist at the first index which is 0 
     // so we need only one kernel to add this, so we do that with kernel 0 in that block
-    if(threadIdx.x == 0)
+    if(cacheIndex == 0)
     {
         c[blockIdx.x] = cache[0];
     }
