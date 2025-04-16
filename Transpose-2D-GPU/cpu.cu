@@ -4,7 +4,7 @@
 #include <functional>
 #include <iostream>
 #include <vector>
-# define N 10
+# define N 1000 
 #include <iomanip>
 
 __global__ void d_transpose(int *d_a, int *d_c, int rows, int columns)
@@ -14,10 +14,12 @@ __global__ void d_transpose(int *d_a, int *d_c, int rows, int columns)
     int columnId = threadIdx.x + blockDim.x * blockIdx.x;
     int rowId = threadIdx.y + blockDim.y * blockIdx.y;
 
-    if(rowId < rows && columnId < columns)
+    while(rowId < rows && columnId < columns)
     {
         d_c[rowId * columns + columnId] = d_a[columnId * rows + rowId];
-        __syncthreads();
+
+        columnId += gridDim.x * blockDim.x;
+        rowId += gridDim.y * blockDim.y;
     }
 }
 
@@ -53,10 +55,11 @@ void transpose(int *A, int *B, int rows, int columns)
 }
 int main(void)
 {
-    int *h_a = (int*)malloc(N * N * sizeof(int));
-    int *h_b = (int*)malloc(N * N * sizeof(int));
+    size_t size = N * N * sizeof(int);
+    int *h_a = (int*)malloc(size);
+    int *h_b = (int*)malloc(size);
 
-    int *h_c = (int*)malloc(N * N * sizeof(int));
+    int *h_c = (int*)malloc(size);
 
     int *d_a, *d_c;
 
@@ -69,28 +72,40 @@ int main(void)
 
     print_matrix(h_b, N, N, "Transposed Matrix B");
 
-    cudaMalloc((void**)&d_a, N * N * sizeof(int));
-    cudaMalloc((void**)&d_c, N * N * sizeof(int));
+    cudaMalloc((void**)&d_a, size);
+    cudaMalloc((void**)&d_c, size);
 
-    cudaMemcpy(d_a, h_a, N * N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
 
     // initially my blockDim was kinda problematic with N, N, 0
     // Tomorrow we have to figure out how to break this thing, what if row, col weretn equal waht if it were greater what if it was lower eh and eh
     // figure out how stride loop would work for the kernel and so on, now im tired.
-    dim3 blockDim(N, N, 1);
-    d_transpose<<<32, blockDim>>>(d_a, d_c, N, N);
+    // stick to hard core 256 and ceil for grid dim bingo
 
-    cudaMemcpy(h_c, d_c, N * N * sizeof(int), cudaMemcpyDeviceToHost);
+    // i think the gridDim and blockDim stuff is the most idiotic and problematic 
+
+    // basically when u say launch a block with 16, 16 threads ur launching 256 threads in other words i want u to look at it like  amatrix
+    // instead of looking at it 16 threads in x and y, in a 16 x 16 matrix although there are 16 threads in each direction
+    // there are elements in that area which is 256 thats howthe threads are structured if u get what i mean 
+    dim3 blockDim(16, 16, 1);
+
+    // finally this is really important initially i was launching gridDim 1 dimensionally by ceil-ing for 256 threads directly across 1 dimension
+    // why wont this work? essentially it wont cus look here threadIdx.y + blockDim.y * blockIdx.y;, when u do this itll launch blocks
+    // across only x axis so blockDim across y axis will always be 0, so essentially when each block processes our matrix in 16 x 16 tiles
+    // if our matrix goes beyond the 16 x 16 chunks it wont basically go beyond the first row/column depending on across what axis we're considering its still a bit hazy to me
+    // might blackbox this
+    dim3 gridDim(N+15/16, N+15/16, 1);  
+    d_transpose<<<gridDim, blockDim>>>(d_a, d_c, N, N);
+
+    cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
 
     print_matrix(h_c, N, N, "Transposed Matrix C");
 
     cudaFree(d_a);
     cudaFree(d_c);
     
-
     free(h_a);
     free(h_b);
-    
 
     return 0;
 }

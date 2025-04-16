@@ -1,13 +1,19 @@
 #include <iostream>
 
+// ill try to explain the logic to make sure i understand so ignore the shiczo ramblings (this is meant to be private anyways)
+
+// i fixed the issue apparently i switched threads per grid (block actually)
+// with the n value, no fucking wonder i got result = 0 skull. if u dont get it
+// my gpu clearly doesnt have 33 * 100 threads much less in a single fucking block
+// also its threads per block btw, grid is where the blocks are arranged in 2d, threads are 3d in grid
 # define threadsPerGrid 256
-# define N 33 * 100
+# define N 1000000 
 
 # define min(a, b) {a<b?a:b}
 
 // just in case, right now we have N == 1000 what if N was something smaller than the predefined number of bloks pre grid
 // that is 32, we do not want that as its a waste of resources i think
-const int blocksPerGrid = 32;
+const int blocksPerGrid = min(32, N+threadsPerGrid-1/threadsPerGrid);
 
 __global__ void dot(int *a, int *b, float *c)
 {
@@ -23,10 +29,9 @@ __global__ void dot(int *a, int *b, float *c)
     float temp = 0;
     while (id < N)
     {
-        temp = a[id] * b[id];
+        temp += a[id] * b[id];
         // we're offsetting the current id by every single id that came before it including it, which means it makes the id 2x
         // meaning next iteration fucker
-        printf("temp: %f\n", temp);
         id += blockDim.x * gridDim.x;
     }
 

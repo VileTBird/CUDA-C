@@ -1,7 +1,7 @@
 #include <iostream>
 #define imin(a,b) (a<b?a:b)
 
-const int N = 33 * 100; 
+const int N = 1000000000 * 33; 
 const int threadsPerBlock = 256; 
 const int blocksPerGrid = imin(32, (N+threadsPerBlock-1) / threadsPerBlock);
 
