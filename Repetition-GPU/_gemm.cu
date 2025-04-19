@@ -60,7 +60,7 @@ int main(void)
     for(int i = 0; i < N * N; i++)
     {
         a[i] = i;
-        b[i] = i + 2;
+        b[i] = i + 1;
     }
 
     gemmCPU(a, b, d, N, N);

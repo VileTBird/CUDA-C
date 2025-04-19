@@ -7,7 +7,7 @@
 // my gpu clearly doesnt have 33 * 100 threads much less in a single fucking block
 // also its threads per block btw, grid is where the blocks are arranged in 2d, threads are 3d in grid
 # define threadsPerGrid 256
-# define N 1000000 
+# define N 1000
 
 # define min(a, b) {a<b?a:b}
 
