@@ -62,6 +62,7 @@ int main(void)
 	gemmCPU(a, b, c, N, N);
 	printMatrix(c, N, N);
 
+	
 	free(a);
 	free(b);
 	free(c);

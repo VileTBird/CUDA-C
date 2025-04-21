@@ -1,62 +1,115 @@
-#include <stdio.h>
-#include <stdlib.h>
+# include <iostream>
+# define N 2
 
-void gemmCPU(int *a, int *b, int *c, int m, int k, int n)
+
+__global__ void gemmGPU(int *a, int *b, int *c, int m, int n, int K)
 {
-    for (int i = 0; i < m; i++)         // rows of A
+    /* flipping row/col id doesnt have an effect on correctness but it canimpact 
+    impact performance due to something called memory coaelscing and data locality
+    which i have no idea what it means but i will learn soon. */
+    int colId = threadIdx.x + blockIdx.x * blockDim.x;
+    int rowId = threadIdx.y + blockIdx.y * blockDim.y;
+
+    while(rowId < m && colId < n)
     {
-        for (int j = 0; j < n; j++)     // columns of B
+        c[rowId * n + colId] = 0;
+        for(int k = 0; k < K; k++)
         {
-            c[i * n + j] = 0;           // initialize result cell
-            for (int x = 0; x < k; x++) // shared dim: cols of A, rows of B
-            {
-                c[i * n + j] += a[i * k + x] * b[x * n + j];
-            }
+            c[rowId * n + colId] += a[rowId * K + k] * b[k * n + colId];
         }
+
+        colId += blockDim.x * gridDim.x;
+        rowId += blockDim.y * gridDim.y;
     }
+
 }
 
-void printMatrixWithLabel(const char* label, int *a, int cols, int rows)
+void printMatrix(int *a, int m, int n)
 {
-    printf("%s (%dx%d):\n", label, rows, cols);
-    for (int i = 0; i < rows; i++)
+    for(int i = 0; i < m; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for(int j = 0; j < n; j++)
         {
-            printf("%4d ", a[i * cols + j]);
+            printf(" %d ", a[i * n + j]);
         }
         printf("\n");
     }
     printf("\n");
 }
 
+void gemmCPU(int *a, int *b, int *c, int m, int n, int K)
+{
+    for(int i = 0; i < m; i++)
+    {
+        for(int j = 0; j < n; j++)
+        {
+            for(int k = 0; k < K; k++)
+            {
+                c[i * n + j] += a[i * K + k] * b[k * n + j];
+            }
+        }
+    }
+}
+
 int main(void)
 {
-    int m = 2, k = 3, n = 2;
+    int *a, *b, *c;
 
-    // Matrix A (2x3)
-    int A[] = {
-        1, 2, 3,
-        4, 5, 6
-    };
+    size_t size = N * N * sizeof(int);
 
-    // Matrix B (3x2)
-    int B[] = {
-        1, 4,
-        3, 6,
-        5, 8
-    };
+    a = (int*) malloc(size);
+    b = (int*) malloc(size);
+    c = (int*) malloc(size);
 
-    // Output matrix C (2x2)
-    int* C = (int*)malloc(m * n * sizeof(int));
+    for(int i = 0; i < N * N; i++)
+    {
+        a[i] = i;
+        b[i] = i;
+    }
 
-    printMatrixWithLabel("Matrix A", A, k, m);  // A is m x k
-    printMatrixWithLabel("Matrix B", B, n, k);  // B is k x n
+    printMatrix(a, N, N);
 
-    gemmCPU(A, B, C, m, k, n);
+    printMatrix(b, N, N);
 
-    printMatrixWithLabel("Result (A x B)", C, n, m);  // C is m x n
+    gemmCPU(a, b, c, N, N, N);
 
-    free(C);
+    printMatrix(c, N, N);
+
+    int *d;
+    int *d_a, *d_b, *d_c;
+    d = (int*) malloc(size);
+
+    cudaMalloc((void**)&d_c, size);
+    cudaMalloc((void**)&d_a, size);
+	cudaMalloc((void**)&d_b, size);
+
+    cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
+    
+    dim3 blockDim(12, 12, 1);
+
+    int blockCount = 0;
+    if (N > blockDim.x)
+    {
+        blockCount = (N+11)/12;
+    }
+    else
+    {
+        blockCount = 32;
+    }
+    dim3 gridDim(blockCount, blockCount, 1);
+    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, N, N, N);
+
+    cudaMemcpy(d, d_c, size, cudaMemcpyDeviceToHost);
+
+    printMatrix(d, N, N);
+    cudaFree(d_c);
+    cudaFree(d_a);
+	cudaFree(d_b);
+	free(d);
+
+    free(a);
+    free(b);
+    free(c);
     return 0;
 }

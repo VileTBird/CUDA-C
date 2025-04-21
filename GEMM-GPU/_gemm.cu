@@ -1,6 +1,36 @@
 # include <iostream>
 # define N 2
 
+
+__global__ void gemmGPU(int *a, int *b, int *c, int m, int n, int K)
+{
+    // flipping row/col id doesnt have an effect on correctness but it canimpact 
+    // impact performance due to something called memory coaelscing and data locality
+    // which i have no idea what it means but i will learn soon.
+    int colId = threadIdx.x + blockIdx.x * blockDim.x;
+    int rowId = threadIdx.y + blockIdx.y * blockDim.y;
+
+    /* although this logic works. i think it could be expanded even further for by breaking down
+    entire matrices into chunks or tiles, which means each thread would process much lesser 
+    numbner of elements and elements that are closer to each other in memory,this would mean that
+    they accumulate the dot product for the same index i, j, then finally when all tiles compute for i, j
+    they just add to the whole. achieving more concurrency, i think thats how tiling should work
+    but fyi i haveno idea how actual tiling works this is just my idea for further optimiztion
+    */
+    while(rowId < m && colId < n)
+    {
+        c[rowId * n + colId] = 0;
+        for(int k = 0; k < K; k++)
+        {
+            c[rowId * n + colId] += a[rowId * K + k] * b[k * n + colId];
+        }
+
+        colId += blockDim.x * gridDim.x;
+        rowId += blockDim.y * gridDim.y;
+    }
+
+}
+
 void printMatrix(int *a, int m, int n)
 {
     for(int i = 0; i < m; i++)
@@ -65,6 +95,40 @@ int main(void)
     gemmCPU(a, b, c, N, N, N);
 
     printMatrix(c, N, N);
+
+    int *d;
+    int *d_a, *d_b, *d_c;
+    d = (int*) malloc(size);
+
+    cudaMalloc((void**)&d_c, size);
+    cudaMalloc((void**)&d_a, size);
+	cudaMalloc((void**)&d_b, size);
+
+    cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
+    
+    dim3 blockDim(12, 12, 1);
+
+    int blockCount = 0;
+    if (N > blockDim.x)
+    {
+        blockCount = (N+11)/12;
+    }
+    else
+    {
+        blockCount = 32;
+    }
+    dim3 gridDim(blockCount, blockCount, 1);
+    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, N, N, N);
+
+    cudaMemcpy(d, d_c, size, cudaMemcpyDeviceToHost);
+
+    printMatrix(d, N, N);
+    cudaFree(d_c);
+    cudaFree(d_a);
+	cudaFree(d_b);
+	free(d);
+
     free(a);
     free(b);
     free(c);
