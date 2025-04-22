@@ -1,46 +1,52 @@
 #include <iostream>
+# define Count 2    
 
-# define N 2
-
-__global__ void transposeGPU(int *a, int *c, int columns, int rows)
+__global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
 {
+    int colId = threadIdx.y + blockIdx.y * blockDim.y;
     int rowId = threadIdx.x + blockIdx.x * blockDim.x;
-    int columnId = threadIdx.y + blockIdx.y * blockDim.y;
 
-    while(rowId < columns && columnId < columns)
+    while(colId < N && rowId < M)
     {
-        c[rowId * columns + columnId] = a[columnId * rows + rowId];
+        for(int k = 0; k < K; k++)
+        {
+            c[rowId * N + colId] += a[rowId * K + k] * b[k * N + colId];
+        }
 
+        colId += blockDim.y * gridDim.y;
         rowId += blockDim.x * gridDim.x;
-        columnId += blockDim.y * gridDim.y;
     }
 }
 
-void printMatrix(int *matrix, int columns)
-{   
-    for(int i = 0; i < N; i++)
+void printMatrix(int *a, int M, int N)
+{
+    for(int i = 0; i < M; i++)
     {
         for(int j = 0; j < N; j++)
         {
-            printf(" %d ", matrix[i * columns + j]);
+            printf(" %d ", a[i * N + j]);
         }
         printf("\n");
     }
     printf("\n");
 }
 
-void gemmCPU(int *a, int *b, int *c, int columns, int rows)
+void gemmCPU(int *a, int *b, int *c, int M, int N, int K)
 {
-    for(int rowId = 0; rowId < N; rowId++)
+    for(int i = 0; i < M; i++)
     {
-        for(int columnId = 0; columnId < N; columnId++)
+        for(int j = 0; j < N; j++)
         {
-            for(int elementId = 0; elementId < N; elementId++)
+            for(int k = 0; k < K; k++)
             {
-                // i donmt really get this clusterfuck but im sure if i can visualize this i can write the kernel myself without outside refernce
-                // lol this was just throwing darts at a wall until i hit th eright combination although i understand the memory layout its still fucked
-                // very confusing
-                c[rowId * columns + columnId] += a[rowId * columns + elementId] * b[elementId * rows + columnId]; 
+                // N * k cus well total number of columns = total number of elements in a row
+                // when u multiply it with k itll be shifting to each corresponding element in that column
+                // when u add j to it itll offset column by 1
+
+                // i * K basically gets the same as well it gets the row but i is slow to incrmeent
+                // i wont incrmeent until i hits max, in other words adding k in eachiteration
+                // will add each element in a row before i increments and takes it to thenext row
+                c[i * N + j] += a[i * K + k] * b[k * N + j];
             }
         }
     }
@@ -48,62 +54,54 @@ void gemmCPU(int *a, int *b, int *c, int columns, int rows)
 
 int main(void)
 {
-    size_t size = N * N * sizeof(int);
 
-    int *a, *b, *d;
-
+    int *a, *b, *c, *d;
+    size_t size = Count * Count * sizeof(int);
     a = (int*) malloc(size);
     b = (int*) malloc(size);
-
+    c = (int*) malloc(size);
     d = (int*) malloc(size);
 
-    for(int i = 0; i < N * N; i++)
+    for(int i = 0; i < Count * Count; i++)
     {
         a[i] = i;
-        b[i] = i + 1;
+        b[i] = i;
     }
 
-    gemmCPU(a, b, d, N, N);
+    // just in case our values wont get stacked on garbage values
+    memset(c, 0, size);
+    memset(d, 0, size);
 
-    printMatrix(a, N);
-    printMatrix(b, N);
+    gemmCPU(a, b, c, Count, Count, Count);
 
-    printMatrix(d, N);
+    printMatrix(a, Count, Count);
+    printMatrix(b, Count, Count);
+    printMatrix(c, Count, Count);
 
-    /*
-    int *c;
-    int *d_a, *d_c;
-    c = (int*) malloc(size);
+    dim3 gridDim((Count+11)/12, (Count+11)/12);
+    dim3 blockDim(12, 12);
 
-    cudaMalloc((void**)&d_c, size);
+    int *d_a, *d_b, *d_c;
+
     cudaMalloc((void**)&d_a, size);
+    cudaMalloc((void**)&d_c, size);
+    cudaMalloc((void**)&d_b, size);
 
     cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
-    
-    dim3 blockDim(12, 12, 1);
+    cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
 
-    int blockCount = 0;
-    if (N > blockDim.x)
-    {
-        blockCount = (N+11)/12;
-    }
-    else
-    {
-        blockCount = 32;
-    }
-    dim3 gridDim(blockCount, blockCount, 1);
-    transposeGPU<<<gridDim, blockDim>>>(d_a, d_c, N, N);
+    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, Count, Count, Count);
 
-    cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(d, d_c, size, cudaMemcpyDeviceToHost);
 
-    printMatrix(c, N);
-    cudaFree(d_c);
+    printMatrix(d, Count, Count);
+
     cudaFree(d_a);
-
+    cudaFree(d_b);
+    cudaFree(d_c);
     free(a);
     free(b);
     free(c);
-
+    free(d);
     return 0;
-    */
 }
