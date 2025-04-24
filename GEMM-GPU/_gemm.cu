@@ -1,5 +1,5 @@
 # include <iostream>
-# define count 2
+# define count 1024
 
 
 __global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
@@ -7,6 +7,8 @@ __global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
     int colId = threadIdx.x + blockIdx.x * blockDim.x;
     int rowId = threadIdx.y + blockIdx.y * blockDim.y;
 
+    
+    // this is wrong
     while(rowId < M && colId < N)
     {
         for(int k = 0; k < K; k++)
@@ -62,10 +64,6 @@ int main(void)
 
     gemmCPU(a, b, c, count, count, count);
 
-    printMatrix(a, count, count);
-    printMatrix(b, count, count);
-    printMatrix(c, count, count);
-
     int *d = (int*) malloc(size);
 
     int *d_a, *d_b, *d_c;
@@ -78,12 +76,20 @@ int main(void)
     cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
 
     dim3 blockDim(16, 16);
-    dim3 gridDim(count+15/16, count+15/16);
-    gemmGPU<<<gridDim, blockDim>>>(a, b, d, count, count, count);
+    dim3 gridDim((count+15)/16, (count+15)/16);
+    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, count, count, count);
 
-    cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(d, d_c, size, cudaMemcpyDeviceToHost);
 
-    printMatrix(d, count, count);
+    if(memcmp(c, d, size) == 0)
+    {
+        printf("Winner winner chicken dinner!\n");
+    }
+    else
+    {
+        printf("Fuck you loser\n");
+    }
+
     free(a);
     free(b);
     free(c);

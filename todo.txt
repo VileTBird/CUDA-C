@@ -1,12 +1,14 @@
 just future directions 
 
-Threads, blocks, warps, memory hierarchy (shared, global, etc.)
+Threads, blocks, warps, memory hierarchy (shared, global, etc.) i would say mostly done
 
-Profiling with nvprof / Nsight
+Profiling with nvprof / Nsight going on rn
+profiling resources: https://github.com/Infatoshi/cuda-course/tree/master/07_Faster_Matmul
+and optimization too i suppose
 
-Writing fast vector/matrix ops
+Writing fast vector/matrix ops going on rn
 
-Memory alignment + coalescing
+Memory alignment + coalescing going on rn 
 
 Build Your Mini Tensor Library
 Use CUDA C++ and PyBind11 to create:
