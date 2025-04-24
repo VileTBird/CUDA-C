@@ -7,6 +7,9 @@ It will contain my initial self contained implementations for my computation Lib
 Right now this contains some Fractal code for the julia set, some Vector Add/Dot product scripts, matrix Transpose and finally Naive GEMM both CPU & GPU. 
 
 
+profiling resources: https://github.com/Infatoshi/cuda-course/tree/master/07_Faster_Matmul
+and optimization too i suppose
+
 
 
 
