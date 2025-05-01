@@ -1,46 +1,42 @@
-# include <iostream>
+#include <iostream>
 # define count 1024
-
 
 __global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
 {
-    int colId = threadIdx.x + blockIdx.x * blockDim.x;
-    int rowId = threadIdx.y + blockIdx.y * blockDim.y;
-
-    
-    // this is wrong
-    while(rowId < M && colId < N)
+    for(int row = threadIdx.x + blockIdx.x * blockDim.x; row < M; row += blockDim.x * gridDim.x)
     {
-        for(int k = 0; k < K; k++)
+        for(int col = threadIdx.y + blockIdx.y * blockDim.y; col < N; col += blockDim.y * gridDim.y)
         {
-            c[rowId * N + colId] += a[rowId * K + k] * b[k * N + colId];
+            for(int k = 0; k < K; k++)
+            {
+                c[ row * N + col ] += a[row * K + k] * b[k * N + col];
+            }
+            
         }
-        rowId += blockDim.y * gridDim.y;
-
-        colId += blockDim.x * gridDim.x;
     }
 }
-void printMatrix(int *a, int M, int N)
+void printMatrix(int *a, int rows, int cols)
 {
-    for(int i = 0; i < M; i++){
-        for(int j = 0; j < N; j++)
+    for(int i = 0; i < rows; i++)
+    {
+        for(int j = 0; j < cols; j++)
         {
-            printf(" %d ", a[i * N + j]);
+            printf(" %d ", a[i * cols + j]);
         }
         printf("\n");
     }
     printf("\n");
 }
 
-void gemmCPU(int *a, int *b, int *c, int M, int N, int K)
+void gemmCPU(int *a, int *b, int *c, int X, int Y, int Z)
 {
-    for(int i = 0; i < M; i++)
+    for(int i = 0; i < X; i++)
     {
-        for(int j = 0; j < N; j++)
+        for(int j = 0; j < Y; j++)
         {
-            for(int k = 0; k < K; k++)
+            for(int k = 0; k < Z; k++)
             {
-                c[i * N + j] += a[i * K + k] * b[k * N + j];
+                c[i * Y + j] += a[i * Z + k] * b[k * Y + j];
             }
         }
     }
@@ -52,19 +48,25 @@ int main(void)
 
     size_t size = count * count * sizeof(int);
 
-    a = (int*) malloc(size);
-    b = (int*) malloc(size);
-    c = (int*) malloc(size);
-
-    for (int i = 0;  i < count * count; i++)
+    a = (int*)malloc(size);
+    b = (int*)malloc(size);
+    c = (int*)malloc(size);
+    
+    for(int i = 0; i < count * count; i++)
     {
         a[i] = i;
         b[i] = i;
     }
 
+ 
+
     gemmCPU(a, b, c, count, count, count);
 
-    int *d = (int*) malloc(size);
+
+
+    int *d;
+
+    d = (int*)malloc(size);
 
     int *d_a, *d_b, *d_c;
 
@@ -76,27 +78,38 @@ int main(void)
     cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
 
     dim3 blockDim(16, 16);
+
     dim3 gridDim((count+15)/16, (count+15)/16);
     gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, count, count, count);
 
     cudaMemcpy(d, d_c, size, cudaMemcpyDeviceToHost);
 
-    if(memcmp(c, d, size) == 0)
+    int i = 0;
+
+    while( i < count * count)
     {
-        printf("Winner winner chicken dinner!\n");
-    }
-    else
-    {
-        printf("Fuck you loser\n");
+        if(c[i] == d[i])
+        {
+            i++;
+            continue;
+        }
+        else
+        {
+            printf("not equal\n");
+            return 0;
+        }
+        i++;
     }
 
     free(a);
     free(b);
     free(c);
-    free(d);
+
     cudaFree(d_a);
     cudaFree(d_b);
     cudaFree(d_c);
-    return 0;
 
+    free(d);
+    printf("equal\n");
+    return 0;
 }
