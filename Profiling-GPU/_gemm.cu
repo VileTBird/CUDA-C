@@ -2,7 +2,7 @@
 # define count 1024
 
 
-__global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
+__global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K, float alpha, float beta)
 {
     int colId = threadIdx.x + blockIdx.x * blockDim.x;
     int rowId = threadIdx.y + blockIdx.y * blockDim.y;
@@ -11,10 +11,19 @@ __global__ void gemmGPU(int *a, int *b, int *c, int M, int N, int K)
     // this is wrong
     if(rowId < M && colId < N)
     {
+        float temp = 0;
         for(int k = 0; k < K; k++)
         {
-            c[rowId * N + colId] += a[rowId * K + k] * b[k * N + colId];
+            temp += a[rowId * K + k] * b[k * N + colId];
         }
+        // its pretty simple scaling factors are essentially just adjusting how much of the data we need 
+        // formula for GEMM is somethign like this C[I, J] = alpha x (a[i, j] * b[j, i]) + beta x c[i, j]
+        // essentially the core intuition iswe assume our cmatrix is not empty
+        // for example it could be containing weights ina neural network or it could be cntaining image data pixel values
+        // we specify alpha and beta as something between 0 and 1, for example if we give beta = 0 we dont watn any data from our previous c matrix
+        // or our original image, just make the change required, or if we give something like alpha = 0.7 and beta = 0.3 preserve
+        // 30% of the information of previous matrix weights and nudge it in the new direction of our matix mult at 70% essentially its also like normalization
+        c[rowId * N + colId] = alpha * temp + beta * c[rowId * N + colId]; 
     }
 }
 void printMatrix(int *a, int M, int N)
@@ -80,7 +89,7 @@ int main(void)
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
-    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, count, count, count);
+    gemmGPU<<<gridDim, blockDim>>>(d_a, d_b, d_c, count, count, count, 0.7, 0.3);
     cudaEventRecord(stop);
 
     cudaEventSynchronize(stop);
